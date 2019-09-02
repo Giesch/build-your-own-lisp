@@ -7,27 +7,95 @@
 #include <editline/readline.h>
 #include <editline/history.h>
 
-long eval_op(char* op, long x, long y) {
-  if (strcmp(op, "+") == 0) { return x + y; }
-  if (strcmp(op, "-") == 0) { return x - y; }
-  if (strcmp(op, "*") == 0) { return x * y; }
-  if (strcmp(op, "/") == 0) { return x / y; }
-  return 0;
+enum lval_type { LVAL_NUM, LVAL_ERR };
+enum lerr_type { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
+
+/* a lisp value; number or error */
+
+typedef union {
+  long num;
+  enum lerr_type err;
+} long_or_lerr;
+
+typedef struct {
+  enum lval_type type;
+  long_or_lerr internal;
+} lval;
+
+lval lval_num(long x) {
+  lval val;
+  val.type = LVAL_NUM;
+  val.internal.num = x;
+  return val;
 }
 
-long eval(mpc_ast_t* tree) {
+lval lval_err(int x) {
+  lval val;
+  val.type = LVAL_ERR;
+  val.internal.err = x;
+  return val;
+}
+
+char* lval_error_msg(int err_code) {
+  switch (err_code) {
+    case LERR_DIV_ZERO:
+      return "Error: Division by Zero";
+    case LERR_BAD_OP:
+      return "Error: Bad Operator";
+    case LERR_BAD_NUM:
+      return "Error: Bad Number";
+  }
+
+  return "Error: Unknown error";
+}
+
+void lval_print(lval val) {
+  switch (val.type) {
+    case LVAL_NUM: printf("%li", val.internal.num); break;
+    case LVAL_ERR:
+      printf("%s", lval_error_msg(val.internal.err));
+      break;
+  }
+}
+
+void lval_println(lval val) {
+  lval_print(val);
+  putchar('\n');
+}
+
+lval eval_op(char* op, lval x, lval y) {
+  if (x.type == LVAL_ERR) { return x; };
+  if (y.type == LVAL_ERR) { return y; };
+
+  if (strcmp(op, "+") == 0) { return lval_num(x.internal.num + y.internal.num); }
+  if (strcmp(op, "-") == 0) { return lval_num(x.internal.num - y.internal.num); }
+  if (strcmp(op, "*") == 0) { return lval_num(x.internal.num * y.internal.num); }
+
+  if (strcmp(op, "/") == 0) {
+    return y.internal.num == 0
+      ? lval_err(LERR_DIV_ZERO)
+      : lval_num(x.internal.num / y.internal.num);
+  }
+
+  return lval_err(LERR_BAD_OP);
+}
+
+lval eval(mpc_ast_t* tree) {
   if (strstr(tree->tag, "number")) {
-    return atoi(tree->contents);
+    errno = 0;
+    long x = strtol(tree->contents, NULL, 10);
+    return errno != ERANGE
+      ? lval_num(x)
+      : lval_err(LERR_BAD_NUM);
   }
 
   /* the operator will be the second child */
   char* op = tree->children[1]->contents;
-
   /* the remaining children are the arguments */
-  long result = eval(tree->children[2]);
+  lval result = eval(tree->children[2]);
   int i = 3;
   while (strstr(tree->children[i]->tag, "expr")) {
-    long child = eval(tree->children[i]);
+    lval child = eval(tree->children[i]);
     result = eval_op(op, result, child);
     i++;
   }
@@ -60,8 +128,8 @@ int main(int argc, char** argv) {
 
     mpc_result_t r;
     if (mpc_parse("<stdin>", input, Lispy, &r)) {
-      long result = eval(r.output);
-      printf("%li\n", result);
+      lval result = eval(r.output);
+      lval_println(result);
       mpc_ast_delete(r.output);
     } else {
       mpc_err_print(r.error);
