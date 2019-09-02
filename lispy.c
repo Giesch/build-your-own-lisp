@@ -7,6 +7,34 @@
 #include <editline/readline.h>
 #include <editline/history.h>
 
+long eval_op(char* op, long x, long y) {
+  if (strcmp(op, "+") == 0) { return x + y; }
+  if (strcmp(op, "-") == 0) { return x - y; }
+  if (strcmp(op, "*") == 0) { return x * y; }
+  if (strcmp(op, "/") == 0) { return x / y; }
+  return 0;
+}
+
+long eval(mpc_ast_t* tree) {
+  if (strstr(tree->tag, "number")) {
+    return atoi(tree->contents);
+  }
+
+  /* the operator will be the second child */
+  char* op = tree->children[1]->contents;
+
+  /* the remaining children are the arguments */
+  long result = eval(tree->children[2]);
+  int i = 3;
+  while (strstr(tree->children[i]->tag, "expr")) {
+    long child = eval(tree->children[i]);
+    result = eval_op(op, result, child);
+    i++;
+  }
+
+  return result;
+}
+
 int main(int argc, char** argv) {
 
   mpc_parser_t* Number = mpc_new("number");
@@ -32,7 +60,8 @@ int main(int argc, char** argv) {
 
     mpc_result_t r;
     if (mpc_parse("<stdin>", input, Lispy, &r)) {
-      mpc_ast_print(r.output);
+      long result = eval(r.output);
+      printf("%li\n", result);
       mpc_ast_delete(r.output);
     } else {
       mpc_err_print(r.error);
