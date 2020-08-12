@@ -297,7 +297,8 @@ lval* lval_eval(lenv* env, lval* val);
 
 lval* builtin_add(lenv* env, lval* val) {
   for (int i = 0; i < val->count; i++) {
-    LASSERT(val, val->cell[i]->type == LVAL_NUM, "cannot add a non-number");
+    LASSERT(val, val->cell[i]->type == LVAL_NUM,
+            "Function '+' passed a non-number");
   }
 
   lval* acc = lval_pop(val, 0);
@@ -314,7 +315,8 @@ lval* builtin_add(lenv* env, lval* val) {
 
 lval* builtin_mul(lenv* env, lval* val) {
   for (int i = 0; i < val->count; i++) {
-    LASSERT(val, val->cell[i]->type == LVAL_NUM, "cannot multiply a non-number");
+    LASSERT(val, val->cell[i]->type == LVAL_NUM,
+            "Function '*' passed a non-number");
   }
 
   lval* acc = lval_pop(val, 0);
@@ -331,7 +333,8 @@ lval* builtin_mul(lenv* env, lval* val) {
 
 lval* builtin_sub(lenv* env, lval* val) {
   for (int i = 0; i < val->count; i++) {
-    LASSERT(val, val->cell[i]->type == LVAL_NUM, "cannot subtract a non-number");
+    LASSERT(val, val->cell[i]->type == LVAL_NUM,
+            "Function '-' passed a non-number");
   }
 
   lval* acc = lval_pop(val, 0);
@@ -353,7 +356,8 @@ lval* builtin_sub(lenv* env, lval* val) {
 
 lval* builtin_div(lenv* env, lval* val) {
   for (int i = 0; i < val->count; i++) {
-    LASSERT(val, val->cell[i]->type == LVAL_NUM, "cannot divide by a non-number");
+    LASSERT(val, val->cell[i]->type == LVAL_NUM,
+            "Function '/' passed a non-number");
   }
 
   lval* acc = lval_pop(val, 0);
@@ -377,9 +381,12 @@ lval* builtin_div(lenv* env, lval* val) {
 }
 
 lval* builtin_head(lenv* env, lval* val) {
-  LASSERT(val, val->count == 1, "Function 'head' passed too many arguments");
-  LASSERT(val, val->cell[0]->type == LVAL_QEXPR, "Function 'head' passed incorrect type");
-  LASSERT(val, val->cell[0]->count != 0, "Function 'head' passed '{}'");
+  LASSERT(val, val->count == 1,
+          "Function 'head' passed too many arguments");
+  LASSERT(val, val->cell[0]->type == LVAL_QEXPR,
+          "Function 'head' passed incorrect type");
+  LASSERT(val, val->cell[0]->count != 0,
+          "Function 'head' passed '{}'");
 
   lval* result = lval_take(val, 0);
   while (result->count > 1) {
@@ -390,9 +397,12 @@ lval* builtin_head(lenv* env, lval* val) {
 }
 
 lval* builtin_tail(lenv* env, lval* val) {
-  LASSERT(val, val->count == 1, "Function 'tail' passed too many arguments");
-  LASSERT(val, val->cell[0]->type == LVAL_QEXPR, "Function 'tail' passed incorrect type");
-  LASSERT(val, val->cell[0]->count != 0, "Function 'tail' passed '{}'");
+  LASSERT(val, val->count == 1,
+          "Function 'tail' passed too many arguments");
+  LASSERT(val, val->cell[0]->type == LVAL_QEXPR,
+          "Function 'tail' passed incorrect type");
+  LASSERT(val, val->cell[0]->count != 0,
+          "Function 'tail' passed '{}'");
 
   lval* result = lval_take(val, 0);
   lval_del(lval_pop(result, 0));
@@ -406,8 +416,10 @@ lval* builtin_list(lenv* env, lval* val) {
 }
 
 lval* builtin_eval(lenv* env, lval* val) {
-  LASSERT(val, val->count == 1, "Function 'eval' passed too many arguments");
-  LASSERT(val, val->cell[0]->type == LVAL_QEXPR, "Function 'eval' passed incorrect type");
+  LASSERT(val, val->count == 1,
+          "Function 'eval' passed too many arguments");
+  LASSERT(val, val->cell[0]->type == LVAL_QEXPR,
+          "Function 'eval' passed incorrect type");
 
   lval* result = lval_take(val, 0);
   result->type = LVAL_SEXPR;
@@ -424,7 +436,8 @@ lval* lval_join(lval* left, lval* right) {
 }
 lval* builtin_join(lenv* env, lval* val) {
   for (int i = 0; i < val->count; i++) {
-    LASSERT(val, val->cell[i]->type == LVAL_QEXPR, "Function 'join' passed incorrect type");
+    LASSERT(val, val->cell[i]->type == LVAL_QEXPR,
+            "Function 'join' passed incorrect type");
   }
 
   lval* result = lval_pop(val, 0);
@@ -435,6 +448,27 @@ lval* builtin_join(lenv* env, lval* val) {
 
   lval_del(val);
   return result;
+}
+
+lval* builtin_def(lenv* env, lval* val) {
+  LASSERT(val, val->cell[0]->type == LVAL_QEXPR,
+          "Function 'def' passed incorrect type");
+
+  lval* syms = val->cell[0];
+  for (int i = 0; i < syms->count; i++) {
+    LASSERT(val, syms->cell[i]->type == LVAL_SYM,
+            "Function 'def' given a non-symbol");
+  }
+
+  LASSERT(val, syms->count == val->count - 1,
+          "Function 'def' given incorrect number of arguments");
+
+  for (int i = 0; i < syms->count; i++) {
+    lenv_put(env, syms->cell[i], val->cell[i + 1]);
+  }
+
+  lval_del(val);
+  return lval_sexpr();
 }
 
 
@@ -502,6 +536,7 @@ void lenv_add_all_builtins(lenv* env) {
   lenv_add_builtin(env, "tail", builtin_tail);
   lenv_add_builtin(env, "eval", builtin_eval);
   lenv_add_builtin(env, "join", builtin_join);
+  lenv_add_builtin(env, "def", builtin_def);
 
   lenv_add_builtin(env, "+", builtin_add);
   lenv_add_builtin(env, "*", builtin_mul);
