@@ -54,12 +54,33 @@ lval* lval_num(long x) {
   return val;
 }
 
-lval* lval_err(char* msg) {
-  lval* val = malloc(sizeof(lval));
+lval* lval_err(char* fmt, ...) {
+  lval* val = malloc(sizeof(val));
   val->type = LVAL_ERR;
-  val->err = malloc(strlen(msg) + 1);
-  strcpy(val->err, msg);
+
+  va_list args;
+  va_start(args, fmt);
+
+  val->err = malloc(512);
+  vsnprintf(val->err, 511, fmt, args);
+  val->err = realloc(val->err, strlen(val->err) + 1);
+
+  va_end(args);
+
   return val;
+}
+
+// why not take an lval_type?
+char* ltype_name(int t) {
+  switch (t) {
+    case LVAL_FUN: return "Function";
+    case LVAL_NUM: return "Number";
+    case LVAL_ERR: return "Error";
+    case LVAL_SYM: return "Symbol";
+    case LVAL_SEXPR: return "S-Expression";
+    case LVAL_QEXPR: return "Q-Expression";
+    default: return "Unknown";
+  }
 }
 
 lval* lval_sym(char* sym) {
@@ -202,7 +223,7 @@ lval* lenv_get(lenv* env, lval* key) {
     }
   }
 
-  return lval_err("unbound symbol");
+  return lval_err("Unbound symbol: '%s'", key->sym);
 }
 
 void lenv_put(lenv* env, lval* key, lval* val) {
@@ -291,8 +312,12 @@ void lval_println(lval* val) {
 
 lval* lval_eval(lenv* env, lval* val);
 
-#define LASSERT(args, cond, err) \
-  if (!(cond)) { lval_del(args); return lval_err(err); }
+#define LASSERT(args, cond, fmt, ...)         \
+  if (!(cond)) {                              \
+    lval* err = lval_err(fmt, ##__VA_ARGS__); \
+    lval_del(args);                           \
+    return err;                                    \
+  }                                           \
 
 
 lval* builtin_add(lenv* env, lval* val) {
@@ -382,9 +407,13 @@ lval* builtin_div(lenv* env, lval* val) {
 
 lval* builtin_head(lenv* env, lval* val) {
   LASSERT(val, val->count == 1,
-          "Function 'head' passed too many arguments");
+          "Function 'head' passed too many arguments. ",
+          "Got %i, expected %i",
+          val->count, 1);
   LASSERT(val, val->cell[0]->type == LVAL_QEXPR,
-          "Function 'head' passed incorrect type");
+          "Function 'head' passed incorrect type for argument 0"
+          "Got %s, Expected %s",
+          ltype_name(val->cell[0]->type), ltype_name(LVAL_QEXPR));
   LASSERT(val, val->cell[0]->count != 0,
           "Function 'head' passed '{}'");
 
